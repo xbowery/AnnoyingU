@@ -32,6 +32,7 @@ from dotenv import load_dotenv
 from database import top_text, bottom_text, last_called, last_called_username
 import requests as re
 from better_profanity import profanity
+from nltk import download
 from nltk.util import ngrams
 from nltk.corpus import words
 from nltk.metrics.distance import (
@@ -41,7 +42,7 @@ from nltk.metrics.distance import (
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud, STOPWORDS
 
-# nltk.download('words') #run this in the first run 
+download('words') #run this in the first run 
 correct_spellings = words.words() 
 typos = []
 
@@ -110,13 +111,21 @@ To get started, type /help""",
     )
 
 
-def vulgarity_check(update: Update, context: CallbackContext):
+def message_check(update: Update, context: CallbackContext):
+    list_words = update.message.text.split()
     profanity.load_censor_words()
+
     chat_id = update.message.chat.id
-    user_id = str(update.effective_user.id)
-    user_first_name = update.effective_user.first_name
-    user_string = user_first_name + " (*&%^) " + user_id
+    
     if profanity.contains_profanity(update.message.text) == True:
+        user_id = str(update.effective_user.id)
+        user_first_name = update.effective_user.first_name
+        if user_first_name == None:
+            user_first_name = " "
+        user_last_name = update.effective_user.last_name
+        if user_last_name == None:
+            user_last_name = " "
+        user_string = user_first_name + " (*&%^) " + user_last_name + " (*&%^) " + user_id
         datetime_now = datetime.datetime.now()
         if chat_id not in last_called:
             last_called[chat_id] = datetime_now
@@ -124,8 +133,9 @@ def vulgarity_check(update: Update, context: CallbackContext):
         else:
             datetime_last_called = last_called[chat_id]
             user_string_last_called = last_called_username[chat_id]
-            username_last_called = user_string_last_called.split(" (*&%^) ")[0]
-            userid_last_called = user_string_last_called.split(" (*&%^) ")[1]
+            firstname_last_called = user_string_last_called.split(" (*&%^) ")[0]
+            lastname_last_called = user_string_last_called.split(" (*&%^) ")[1]
+            userid_last_called = user_string_last_called.split(" (*&%^) ")[2]
             time_diff = str(datetime_now - datetime_last_called)
 
             word_list = ['a mind\-boggling', 'an unbelievable', 'a spectacular', 'an exceptional', 'a mind\-blowing', 'an incredible', 'an inconceivable span of', 'an unimaginable', 'an impressive', 'a remarkable', 'a grand total of', 'a noteworthy', 'a shocking span of', 'a wondrous', 'a peaceful span of', 'a momentous', 'an astonishing']
@@ -162,33 +172,31 @@ def vulgarity_check(update: Update, context: CallbackContext):
             
 It has been _{word_list[rand_num]}_ *{word_input}* since someone spewed a vulgarity here\!
 
-Previous user to spew a vulgarity: [{username_last_called}](tg://user?id={userid_last_called})""")
+Previous user to spew a vulgarity: [{firstname_last_called} {lastname_last_called}](tg://user?id={userid_last_called})""")
 
-    if 'rick' in update.message.text.lower():
+    elif 'rick' in update.message.text.lower():
         update.message.reply_video('https://c.tenor.com/x8v1oNUOmg4AAAAC/rickroll-roll.gif')
 
-    list_words = update.message.text.split()
-    count = 0 
-    for word in list_words:
-        if word not in correct_spellings:
-            count += 1
-            candidates = [(jaccard_distance(set(ngrams(word, 2)), set(ngrams(w, 2))),w) for w in correct_spellings if w[0]==word[0]]
-            if len(candidates) != 0:
-                correction = sorted(candidates)[0] #gets most similar word based on jaccard distance
-                typos.append((correction[0], word)) #adds jaccard score and original typo into list 
-    
-    context.chat_data["typos"] = typos #saves typos and scores into list 
-    
-    if count > 0: #if there are errors
-        update.message.reply_text(f"Your reply contained {str(count)} typo errors! Are you even trying?")
-    
-    if len(typos) > 10: #triggered when more than 10 errors, replies with worst jaccard score (i.e. 1)
-        typos.sort(key=lambda x:x[1])
-        worst_spelt = typos[-1][1]
-        update.message.reply_text(f"Someone made more than 10 typos today... Your worstly spelt word is {worst_spelt}")
+    else:
+        count = 0 
+        for word in list_words:
+            if word not in correct_spellings:
+                count += 1
+                candidates = [(jaccard_distance(set(ngrams(word, 2)), set(ngrams(w, 2))),w) for w in correct_spellings if w[0]==word[0]]
+                if len(candidates) != 0:
+                    correction = sorted(candidates)[0] #gets most similar word based on jaccard distance
+                    typos.append((correction[0], word)) #adds jaccard score and original typo into list 
         
-    
-    
+        context.chat_data["typos"] = typos #saves typos and scores into list 
+        
+        if count == 1: #if there are errors
+            update.message.reply_text(f"Your reply contained {str(count)} typo error! Are you even trying?")
+        if count > 1:
+            update.message.reply_text(f"Your reply contained {str(count)} typo errors! Are you even trying?")
+        if len(typos) > 10: #triggered when more than 10 errors, replies with worst jaccard score (i.e. 1)
+            typos.sort(key=lambda x:x[1])
+            worst_spelt = typos[-1][1]
+            update.message.reply_text(f"Someone made more than 10 typos today... Your worstly spelt word is {worst_spelt}")
 
 
 def help(update: Update, context: CallbackContext):
@@ -401,7 +409,7 @@ def main():
     dp.add_handler(info_handler)
     dp.add_handler(settings_handler)
 
-    dp.add_handler(MessageHandler(Filters.text, vulgarity_check))
+    dp.add_handler(MessageHandler(Filters.text, message_check))
 
     unknown_handler = MessageHandler(Filters.command, unknown)
     dp.add_handler(unknown_handler)
