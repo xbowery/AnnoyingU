@@ -108,7 +108,7 @@ def unknown(update: Update, context: CallbackContext):
 
 def init_settings(chat_id, context):
 
-    if context.chat_data["chat_settings"]:
+    if "chat_settings" in context.chat_data:
         return
 
     chat_settings = {
@@ -136,7 +136,7 @@ To get started, type /help""",
 
 
 def message_check(update: Update, context: CallbackContext):
-    if not context.chat_data["chat_settings"]:
+    if "chat_settings" not in context.chat_data:
         init_settings(update.message.chat_id, context)
 
     chat_settings = context.chat_data["chat_settings"]
@@ -365,6 +365,7 @@ def settings(update: Update, context: CallbackContext):
 def settings_reply(update: Update, context: CallbackContext):
     msg = update.message.text
 
+    print(context.chat_data)
     if "chat_settings" not in context.chat_data:
         init_settings(update.message.chat_id, context)
 
@@ -525,7 +526,9 @@ def main():
     # Get dispatcher to register handlers
     dp = updater.dispatcher
 
-    # dp.chat_data
+    for c in SETTINGSDB.find():
+        del c["_id"]
+        dp.chat_data[c["chatid"]]["chat_settings"] = c
 
     dp.add_handler(CommandHandler("start", start))
 
