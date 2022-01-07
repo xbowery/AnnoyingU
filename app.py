@@ -28,6 +28,7 @@ import logging
 import os
 import random
 import datetime
+import time
 
 from dotenv import load_dotenv
 from database import top_text, bottom_text, last_called, last_called_username
@@ -247,18 +248,36 @@ Previous user to spew a vulgarity: [{firstname_last_called} {lastname_last_calle
         )
 
     elif "rick" in update.message.text.lower():
-        option = random.randint(0,1)
+        option = random.randint(0,4)
         if option == 0:
             update.message.reply_video(
                 "https://c.tenor.com/x8v1oNUOmg4AAAAC/rickroll-roll.gif"
             )
-        else:
-            update.message.reply_text("Here's a Spotify Code to help solve all your problems!\n\nDo scan it!")
+        elif option == 1:
+            update.message.reply_text("Here's a Spotify Code to help solve all your problems!\n\nDo scan it using the Spotify app on your phone!")
             context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo="https://i.imgur.com/iI76wrG.jpg"
             )
-
+        elif option == 2:
+            new_list = []
+            with open("lyrics.txt", 'r+', encoding="utf-8") as file:
+                new_list = file.readlines()
+                for text in new_list:
+                    words = text.split("%")
+                    sentence = ""
+                    for i in range(len(words)):
+                        sentence += words[i] + "\n"
+                    context.bot.send_message(
+                        chat_id = update.effective_chat.id,
+                        text = sentence
+                    )
+                    time.sleep(1.5)
+        elif option == 3:
+            update.message.reply_text("Here you go, champ! You earned this 😊\n\nbit.do/YeetYeet", disable_web_page_preview=True)
+        else:
+            update.message.reply_text("Hey rockstar, you earned this!\n\nhttps://tinyurl.com/hacknroll2k22", disable_web_page_preview=True)
+    
     else:
         count = 0
         for word in list_words:
