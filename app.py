@@ -126,6 +126,7 @@ def message_check(update: Update, context: CallbackContext):
     if profanity.contains_profanity(update.message.text) == True:
         user_id = str(update.effective_user.id)
         user_first_name = update.effective_user.first_name
+
         if user_first_name == None:
             user_first_name = " "
         user_last_name = update.effective_user.last_name
@@ -134,16 +135,19 @@ def message_check(update: Update, context: CallbackContext):
         user_string = (
             user_first_name + " (*&%^) " + user_last_name + " (*&%^) " + user_id
         )
+
         datetime_now = datetime.datetime.now()
-        if chat_id not in last_called:
-            last_called[chat_id] = datetime_now
-            last_called_username[chat_id] = user_string
-        else:
-            datetime_last_called = last_called[chat_id]
-            user_string_last_called = last_called_username[chat_id]
+
+        if chat_time_storage := PROFANITY_TIMEDB.find_one(
+            {"chatid": update.message.chat_id}
+        ):
+            datetime_last_called = chat_time_storage["datetime"]
+            user_string_last_called = chat_time_storage["userstring"]
+
             firstname_last_called = user_string_last_called.split(" (*&%^) ")[0]
             lastname_last_called = user_string_last_called.split(" (*&%^) ")[1]
             userid_last_called = user_string_last_called.split(" (*&%^) ")[2]
+
             time_diff = str(datetime_now - datetime_last_called)
 
             word_list = [
@@ -191,8 +195,8 @@ def message_check(update: Update, context: CallbackContext):
                 else:
                     word_input = str(num_seconds) + " seconds"
 
-            last_called[chat_id] = datetime_now
-            last_called_username[chat_id] = user_string
+            chat_time_storage["datetime"] = datetime_now
+            chat_time_storage["userstring"] = user_string
             rand_num = random.randint(0, len(word_list) - 1)
             update.message.reply_markdown_v2(
                 fr"""🎉 *RESET THE COUNTER\!\!\!* 🎉
@@ -201,6 +205,19 @@ It has been _{word_list[rand_num]}_ *{word_input}* since someone spewed a vulgar
 
 Previous user to spew a vulgarity: [{firstname_last_called} {lastname_last_called}](tg://user?id={userid_last_called})"""
             )
+        else:
+            chat_time_storage = {
+                "chatid": update.message.chat_id,
+                "datetime": datetime_now,
+                "userstring": user_string,
+            }
+
+        context.chat_data["chat_time_storage"] = chat_time_storage
+
+        update_obj = {"$set": chat_time_storage}
+        PROFANITY_TIMEDB.update_one(
+            {"chatid": chat_time_storage["chatid"]}, update_obj, upsert=True
+        )
 
     elif "rick" in update.message.text.lower():
         update.message.reply_video(
@@ -510,6 +527,7 @@ def main():
 
     dp.add_handler(CommandHandler("help", help))
 
+    dp.add_handler(meme_conv_handler)
     dp.add_handler(info_handler)
     dp.add_handler(settings_handler)
 
