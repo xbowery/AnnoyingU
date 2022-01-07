@@ -38,7 +38,7 @@ bot = Bot(TOKEN)
 download("words")  # run this in the first run
 correct_spellings = words.words()
 
-typos = []
+typos = {}
 
 
 def plot_cloud(wordcloud):
@@ -71,11 +71,20 @@ def word_cloud(update: Update, context: CallbackContext):
     img = open("word_cloud.png", "rb")
     update.message.reply_photo(img)  ##dk how to send the file
 
-
 def typo_msg(update: Update, context: CallbackContext):
-    list_words = update.message.text.split()
+    punc = '''!()-[]{};:'"\,<>./?@#$%^&*_~'''
+    text = update.message.text
+    user = update.effective_user
+
+    # Removing punctuations in string
+    # Using loop + punctuation string
+    for ele in text:
+        if ele in punc:
+            text = text.replace(ele, "")
+    list_words = text.split()
     count = 0
 
+    count = 0
     for word in list_words:
         if word not in correct_spellings:
             count += 1
@@ -88,25 +97,43 @@ def typo_msg(update: Update, context: CallbackContext):
                 correction = sorted(candidates)[
                     0
                 ]  # gets most similar word based on jaccard distance
-                typos.append(
-                    (correction[0], word)
-                )  # adds jaccard score and original typo into list
+                if user not in typos:
+                    typos[user] = [(correction[0], word)]
+                else:
+                    typos[user].append((correction[0], word))
+                    # adds jaccard score and original typo into list
 
     context.chat_data["typos"] = typos  # saves typos and scores into list
 
-    if count > 0:  # if there are errors
+    if count == 1:  # if there are errors
+        update.message.reply_text(
+            f"Your reply contained {str(count)} typo error! Are you even trying?"
+        )
+    if count > 1:
         update.message.reply_text(
             f"Your reply contained {str(count)} typo errors! Are you even trying?"
         )
-
     if (
-        len(typos) > 10
+        len(typos[user]) > 10
     ):  # triggered when more than 10 errors, replies with worst jaccard score (i.e. 1)
-        typos.sort(key=lambda x: x[1])
-        worst_spelt = typos[-1][1]
+        typos[user].sort(key=lambda x: x[1])
+        worst_spelt = typos[user][-1][1]
         update.message.reply_text(
             f"Someone made more than 10 typos today... Your worstly spelt word is {worst_spelt}"
         )
+
+def get_highest_typo(update: Update, context: CallbackContext):
+    typos = context.chat_data['typos']
+    users =  list(typos.keys())
+    max_typo = 0
+    user_most_typos = ''
+    for user in users:
+        num_typos = len(typos[user])
+        if num_typos > max_typo:
+            max_typo = len(typos[user])
+            user_most_typos = user
+    update.message.reply_text(f"{user} has the most typos with {str(max_typo)} typos so far!")
+
 
 
 def main():
@@ -115,7 +142,7 @@ def main():
     # Get dispatcher to register handlers
     dp = updater.dispatcher
 
-    dp.add_handler(CommandHandler("show", show))
+    dp.add_handler(CommandHandler("most_typo", get_highest_typo))
     dp.add_handler(CommandHandler("word_cloud", word_cloud))
     dp.add_handler(MessageHandler(Filters.text, typo_msg))
 
