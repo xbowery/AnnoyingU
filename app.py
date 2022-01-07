@@ -106,6 +106,20 @@ def unknown(update: Update, context: CallbackContext):
     )
 
 
+def init_settings(chat_id, context):
+    if chat_settings := SETTINGSDB.find_one({"chatid": chat_id}):
+        pass
+    else:
+        chat_settings = {
+            "chatid": chat_id,
+            "Spelling Hornets": True,
+            "Profanity Alert": True,
+            "wordlist": [],
+        }
+
+    context.chat_data["chat_settings"] = chat_settings
+
+
 def start(update: Update, context: CallbackContext) -> None:
     user = update.effective_user
     update.message.reply_markdown_v2(
@@ -116,8 +130,13 @@ Welcome to the *All In One*, _State of the art_ mistake and profanity identifier
 To get started, type /help""",
     )
 
+    init_settings(update.message.chat_id, context)
+
 
 def message_check(update: Update, context: CallbackContext):
+    if "chat_settings" not in context.chat_data:
+        init_settings(update.message.chat_id, context)
+
     list_words = update.message.text.split()
     profanity.load_censor_words()
 
@@ -333,17 +352,10 @@ def settings(update: Update, context: CallbackContext):
 def settings_reply(update: Update, context: CallbackContext):
     msg = update.message.text
 
-    if chat_settings := SETTINGSDB.find_one({"chatid": update.message.chat_id}):
-        pass
-    else:
-        chat_settings = {
-            "chatid": update.message.chat_id,
-            "Spelling Hornets": True,
-            "Profanity Alert": True,
-            "wordlist": [],
-        }
+    if "chat_settings" not in context.chat_data:
+        init_settings(update.message.chat_id, context)
 
-    context.chat_data["chat_settings"] = chat_settings
+    chat_settings = context.chat_data["chat_settings"]
 
     if msg in ACCEPTABLE_SETTINGS:
 
@@ -400,6 +412,8 @@ def change_settings(update: Update, context: CallbackContext):
     update_obj = {"$set": chat_settings}
 
     SETTINGSDB.update_one({"chatid": chat_settings["chatid"]}, update_obj, upsert=True)
+    context.chat_data["chat_settings"] = chat_settings
+
     return return_state
 
 
@@ -417,6 +431,8 @@ def change_wordlist(update: Update, context: CallbackContext):
             update_obj,
             upsert=True,
         )
+
+        context.chat_data["chat_settings"] = chat_settings
 
         update.message.reply_text(
             f"Wordlist successfully updated",
