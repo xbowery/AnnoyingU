@@ -330,13 +330,17 @@ def plot_cloud(wordcloud):
 
 
 def word_cloud(update: Update, context: CallbackContext):
-    typos = context.chat_data["typos"]
-    users = list(typos.keys())
-    words = []
-    for user in users:
-        words.append(typos[user][1])
+    if not "typos" in context.chat_data:
+        update.message.reply_text("All great! No Spelling erros.")
+        return
 
-    # convo handler? maybe can ask what colour they want
+    update.message.reply_text("Be patient! I am generating it now!")
+    typos = context.chat_data["typos"]
+    words = []
+    for w in typos.values():
+        for word in w:
+            words.append(word[1])
+
     wordcloud = WordCloud(
         width=3000,
         height=2000,
