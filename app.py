@@ -71,7 +71,8 @@ db = client.annoyme
 
 PROFANITY_USERDB = db["profanity_user"]
 PROFANITY_TIMEDB = db["profanity_time"]
-SPELLING_ERRORDB = db["profanity"]
+SPELLING_ERRORDB = db["spelling"]
+SETTINGSDB = db["user_settings"]
 
 # https://pymongo.readthedocs.io/en/stable/tutorial.html
 # PROFANITY_USERDB.insert_one({"test": 123})
