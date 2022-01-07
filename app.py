@@ -24,11 +24,23 @@ from telegram.ext import (
 )
 import logging
 import os
-import random
 
 from dotenv import load_dotenv
 import requests as re
 from better_profanity import profanity
+from nltk.util import ngrams
+from nltk.corpus import words
+from nltk.metrics.distance import (
+    edit_distance,
+    jaccard_distance,
+    )
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud, STOPWORDS
+
+# nltk.download('words') #run this in the first run 
+correct_spellings = words.words() 
+typos = []
+
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -37,9 +49,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 fake_db = {"Spelling Hornets": True, "Profanity Alert": True}
-
-top_text = {}
-bottom_text = {}
 
 reply_info_keyboard = [
     ["Spelling Hornets"],
@@ -60,8 +69,6 @@ START_STATE, BOOL_STATE = range(2)
 
 load_dotenv("./.env")
 TOKEN = os.getenv("token")
-USERNAME = os.getenv("username")
-PASSWORD = os.getenv("password")
 bot = Bot(TOKEN)
 
 
@@ -87,6 +94,32 @@ def vulgarity_check(update: Update, context: CallbackContext):
     profanity.load_censor_words()
     if profanity.contains_profanity(update.message.text) == True:
         update.message.reply_text("What a vulgar dude.")
+
+    if 'rick' in update.message.text.lower():
+        update.message.reply_video('https://c.tenor.com/x8v1oNUOmg4AAAAC/rickroll-roll.gif')
+
+    list_words = update.message.text.split()
+    count = 0 
+    for word in list_words:
+        if word not in correct_spellings:
+            count += 1
+            candidates = [(jaccard_distance(set(ngrams(word, 2)), set(ngrams(w, 2))),w) for w in correct_spellings if w[0]==word[0]]
+            if len(candidates) != 0:
+                correction = sorted(candidates)[0] #gets most similar word based on jaccard distance
+                typos.append((correction[0], word)) #adds jaccard score and original typo into list 
+    
+    context.chat_data["typos"] = typos #saves typos and scores into list 
+    
+    if count > 0: #if there are errors
+        update.message.reply_text(f"Your reply contained {str(count)} typo errors! Are you even trying?")
+    
+    if len(typos) > 10: #triggered when more than 10 errors, replies with worst jaccard score (i.e. 1)
+        typos.sort(key=lambda x:x[1])
+        worst_spelt = typos[-1][1]
+        update.message.reply_text(f"Someone made more than 10 typos today... Your worstly spelt word is {worst_spelt}")
+        
+    
+    
 
 
 def help(update: Update, context: CallbackContext):
@@ -199,50 +232,6 @@ def change_settings(update: Update, context: CallbackContext):
     )
     return ConversationHandler.END
 
-def meme_generator(update:Update, context:CallbackContext):
-    update.message.reply_text("Please enter the text for the top line:")
-    
-    return START_STATE
-
-def message_filter(update:Update, context:CallbackContext):
-    chat_id = update.effective_user.id
-    text = update.message.text
-
-    if (text == "/cancel"):
-        update.message.reply_text("Request Cancelled. Press /start to use the bot again!")
-        if (chat_id in top_text):
-            del top_text[chat_id]
-        if (chat_id in bottom_text):
-            del bottom_text[chat_id]
-        return ConversationHandler.END
-    elif (chat_id not in top_text):
-        top_text[chat_id] = text
-        update.message.reply_text("Please enter the text for the bottom line:")
-        return START_STATE
-    else:
-        bottom_text[chat_id] = text
-
-        data = re.get('https://api.imgflip.com/get_memes').json()['data']['memes']
-        image_id = random.randint(0, len(data) - 1)
-        URL = 'https://api.imgflip.com/caption_image'
-
-        params = {
-            'username':USERNAME,
-            'password':PASSWORD,
-            'template_id':data[image_id]['id'],
-            'text0':top_text[chat_id],
-            'text1':bottom_text[chat_id]
-        }
-
-        response = re.request('POST',URL,params=params).json()
-        url_image = response['data']['url']
-
-        update.message.reply_photo(photo=url_image)
-
-        del top_text[chat_id]
-        del bottom_text[chat_id]
-
-        return ConversationHandler.END
 
 def cancel(update: Update, context: CallbackContext) -> int:
     """Cancels and ends the conversation."""
@@ -253,6 +242,7 @@ def cancel(update: Update, context: CallbackContext) -> int:
     )
 
     return ConversationHandler.END
+
 
 def main():
     updater = Updater(TOKEN, use_context=True)
@@ -279,20 +269,10 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
-    meme_conv_handler = ConversationHandler(
-        entry_points = [CommandHandler('memes', meme_generator)],
-        states = {
-            1: [MessageHandler(Filters.text, message_filter)],
-        },
-        fallbacks = [CommandHandler('cancel', cancel)],
-        allow_reentry = True
-    )
-
     dp.add_handler(CommandHandler("help", help))
 
     dp.add_handler(info_handler)
     dp.add_handler(settings_handler)
-    dp.add_handler(meme_conv_handler)
 
     dp.add_handler(MessageHandler(Filters.text, vulgarity_check))
 
