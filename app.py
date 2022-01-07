@@ -38,17 +38,24 @@ logger = logging.getLogger(__name__)
 TOKEN = os.environ.get("TOKEN")
 bot = Bot(TOKEN)
 
+fake_db = {"Spelling Hornets": True, "Profanity Alert": True}
 
-reply_keyboard = [
+reply_info_keyboard = [
     ["Spelling Hornets"],
     ["Profanity Alert"],
     ["Meme Generator"],
     ["End"],
 ]
 
-markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+reply_settings_keyboard = [["Spelling Hornets"], ["Profanity Alert"], ["End"]]
 
-INFO_STATE = 1
+boolean_keyboard = [["On"], ["Off"], ["Cancel"]]
+
+markup_info = ReplyKeyboardMarkup(reply_info_keyboard, one_time_keyboard=True)
+markup_settings = ReplyKeyboardMarkup(reply_settings_keyboard, one_time_keyboard=True)
+markup_boolean = ReplyKeyboardMarkup(boolean_keyboard, one_time_keyboard=True)
+
+START_STATE, BOOL_STATE = range(2)
 
 
 def unknown(update: Update, context: CallbackContext):
@@ -80,14 +87,13 @@ To *toggle the settings*, type /settings
 
 def info(update: Update, context: CallbackContext):
     update.message.reply_markdown_v2(
-        "Select one of these options:", reply_markup=markup
+        "Select one of these options:", reply_markup=markup_info
     )
-    return INFO_STATE
+    return START_STATE
 
 
 def info_reply(update: Update, context: CallbackContext):
     msg = update.message.text
-    logger.info(msg)
 
     if msg == "Spelling Hornets":
         update.message.reply_markdown_v2(
@@ -127,11 +133,58 @@ We also allow users to create memes of a pre\-defined template which links to th
 
     else:
         update.message.reply_text("I don't understand you...")
-    return INFO_STATE
+    return START_STATE
 
 
 def settings(update: Update, context: CallbackContext):
-    pass
+    update.message.reply_text(
+        "Choose which settings you would like to edit:", reply_markup=markup_settings
+    )
+
+    return START_STATE
+
+
+def settings_reply(update: Update, context: CallbackContext):
+    msg = update.message.text
+    logger.info(msg)
+    if msg in fake_db:
+        update.message.reply_text(
+            f"Settings for {msg}: {'ON' if fake_db[msg] else 'OFF'}.\nSelect the new settings:",
+            reply_markup=markup_boolean,
+        )
+        context.chat_data["Settings_Option"] = msg
+        return BOOL_STATE
+
+    if msg == "End":
+        update.message.reply_text("Bye", reply_markup=ReplyKeyboardRemove())
+        return ConversationHandler.END
+
+    update.message.reply_text(
+        f"Sorry, such settings does not exist", reply_markup=markup_settings
+    )
+    return START_STATE
+
+
+def change_settings(update: Update, context: CallbackContext):
+    msg = update.message.text
+    opt = context.chat_data["Settings_Option"]
+
+    if msg not in ["On", "Off", "Back"]:
+        update.message.reply_text(
+            "Sorry. This is not a valid option", reply_markup=markup_settings
+        )
+        return START_STATE
+    elif msg == "Back":
+        update.message.reply_text(reply_markup=markup_settings)
+        return START_STATE
+    else:
+        fake_db[opt] = True if msg == "On" else False
+
+    update.message.reply_text(
+        f"Settings for {opt}: {'ON' if fake_db[opt] else 'OFF'}",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    return ConversationHandler.END
 
 
 def cancel(update: Update, context: CallbackContext) -> int:
@@ -156,14 +209,23 @@ def main():
     info_handler = ConversationHandler(
         entry_points=[CommandHandler("info", info)],
         states={
-            1: [MessageHandler(Filters.text, info_reply)],
+            START_STATE: [MessageHandler(Filters.text, info_reply)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
-    dp.add_handler(info_handler)
+    settings_handler = ConversationHandler(
+        entry_points=[CommandHandler("settings", settings)],
+        states={
+            START_STATE: [MessageHandler(Filters.text, settings_reply)],
+            BOOL_STATE: [MessageHandler(Filters.text, change_settings)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+
     dp.add_handler(CommandHandler("help", help))
-    dp.add_handler(CommandHandler("settings", settings))
+    dp.add_handler(info_handler)
+    dp.add_handler(settings_handler)
 
     unknown_handler = MessageHandler(Filters.command, unknown)
     dp.add_handler(unknown_handler)
