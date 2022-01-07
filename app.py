@@ -7,6 +7,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
     KeyboardButton,
     InlineQueryResultArticle,
     InputTextMessageContent,
@@ -22,7 +23,11 @@ from telegram.ext import (
     InlineQueryHandler,
 )
 import logging
-from db import settings
+
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -30,8 +35,20 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-TOKEN = "5080624320:AAEEOUrjnItiTv-F_7VgsosKJbSi_cK13Nc"  # change
+TOKEN = os.environ.get("TOKEN")
 bot = Bot(TOKEN)
+
+
+reply_keyboard = [
+    ["Spelling Hornets"],
+    ["Profanity Alert"],
+    ["Meme Generator"],
+    ["End"],
+]
+
+markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+
+INFO_STATE = 1
 
 
 def unknown(update: Update, context: CallbackContext):
@@ -46,7 +63,7 @@ def start(update: Update, context: CallbackContext) -> None:
     update.message.reply_markdown_v2(
         fr"""Hi {user.mention_markdown_v2()}\!
 
-Welcome to the **All In One**, *State of the art* mistake and profanity identifier\.
+Welcome to the *All In One*, _State of the art_ mistake and profanity identifier\.
 
 To get started, type /help""",
     )
@@ -54,18 +71,78 @@ To get started, type /help""",
 
 def help(update: Update, context: CallbackContext):
     update.message.reply_markdown_v2(
-        fr"""To see more **information** about our various services, type /info
-To **toggle the settings**, type /settings
+        fr"""To see more *information*, type /info
+
+To *toggle the settings*, type /settings
     """
     )
 
 
 def info(update: Update, context: CallbackContext):
-    pass
+    update.message.reply_markdown_v2(
+        "Select one of these options:", reply_markup=markup
+    )
+    return INFO_STATE
+
+
+def info_reply(update: Update, context: CallbackContext):
+    msg = update.message.text
+    logger.info(msg)
+
+    if msg == "Spelling Hornets":
+        update.message.reply_markdown_v2(
+            """*Spelling Hornets* is our best attempt to shame those who constantly makes spelling mistakes\.
+
+We keep track of users' mistakes and constantly remind the entire group of your mistakes so that people can *laugh behind your backs*\.
+
+We also generate a wordcloud and present them to everyone in a nice fancy manner to showcase the groups' mistakes in totality\.
+
+Sponsored by the _type good English movement 2022_
+"""
+        )
+
+    elif msg == "Profanity Alert":
+        update.message.reply_markdown_v2(
+            """*Profanity Alert* constantly reminds you of your vulgur nature in chats\.
+
+We keep track of how long a group can last to maintain their purity before they start using profanities\.
+
+Do not try to cheat the system, we have good ~if\-else statements~ advanced _AI_ to identify them to a high accuracy\.
+"""
+        )
+
+    elif msg == "Meme Generator":
+        update.message.reply_markdown_v2(
+            """*Meme Generator* amplifies the fun by allowing anyone to create memes on the go\.
+
+We also allow users to create memes of a pre\-defined template which links to their spelling errors\.
+"""
+        )
+
+    elif msg == "End":
+        update.message.reply_text(
+            "Hope you gained some new knowledge!", reply_markup=ReplyKeyboardRemove()
+        )
+        return ConversationHandler.END
+
+    else:
+        update.message.reply_text("I don't understand you...")
+    return INFO_STATE
 
 
 def settings(update: Update, context: CallbackContext):
     pass
+
+
+def cancel(update: Update, context: CallbackContext) -> int:
+    """Cancels and ends the conversation."""
+    user = update.message.from_user
+    logger.info("User %s canceled the conversation.", user.first_name)
+    update.message.reply_text(
+        "Hope you learnt more about our services.", reply_markup=ReplyKeyboardRemove()
+    )
+
+    return ConversationHandler.END
 
 
 def main():
@@ -75,8 +152,17 @@ def main():
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("start", start))
+
+    info_handler = ConversationHandler(
+        entry_points=[CommandHandler("info", info)],
+        states={
+            1: [MessageHandler(Filters.text, info_reply)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+
+    dp.add_handler(info_handler)
     dp.add_handler(CommandHandler("help", help))
-    dp.add_handler(CommandHandler("info", info))
     dp.add_handler(CommandHandler("settings", settings))
 
     unknown_handler = MessageHandler(Filters.command, unknown)
