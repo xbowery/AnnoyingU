@@ -23,21 +23,17 @@ from telegram.ext import (
     InlineQueryHandler,
 )
 import logging
-
-from dotenv import load_dotenv
+from db import settings
 import os
-
-load_dotenv()
+from dotenv import load_dotenv
+import requests as re
+from better_profanity import profanity
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
 logger = logging.getLogger(__name__)
-
-TOKEN = os.environ.get("TOKEN")
-bot = Bot(TOKEN)
-
 
 reply_keyboard = [
     ["Spelling Hornets"],
@@ -50,6 +46,9 @@ markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
 
 INFO_STATE = 1
 
+load_dotenv("./.env")
+TOKEN = os.getenv("token")
+bot = Bot(TOKEN)
 
 def unknown(update: Update, context: CallbackContext):
     context.bot.send_message(
@@ -67,6 +66,11 @@ Welcome to the *All In One*, _State of the art_ mistake and profanity identifier
 
 To get started, type /help""",
     )
+
+def vulgarity_check(update:Update, context:CallbackContext):
+    profanity.load_censor_words()
+    if profanity.contains_profanity(update.message.text) == True:
+        update.message.reply_text("What a vulgar dude.")
 
 
 def help(update: Update, context: CallbackContext):
@@ -164,6 +168,7 @@ def main():
     dp.add_handler(info_handler)
     dp.add_handler(CommandHandler("help", help))
     dp.add_handler(CommandHandler("settings", settings))
+    dp.add_handler(MessageHandler(Filters.text, vulgarity_check))
 
     unknown_handler = MessageHandler(Filters.command, unknown)
     dp.add_handler(unknown_handler)
