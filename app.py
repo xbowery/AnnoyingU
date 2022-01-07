@@ -137,7 +137,15 @@ def message_check(update: Update, context: CallbackContext):
     if "chat_settings" not in context.chat_data:
         init_settings(update.message.chat_id, context)
 
-    list_words = update.message.text.split()
+    punc = '''!()-[]{};:'"\,<>./?@#$%^&*_~'''
+    text = update.message.text.lower()
+    for ele in text:
+        if ele in punc:
+            text = text.replace(ele, "")
+    list_words = text.split()
+    for word in list_words:
+        word = word.lower()
+
     profanity.load_censor_words()
 
     chat_id = update.message.chat.id
@@ -239,9 +247,17 @@ Previous user to spew a vulgarity: [{firstname_last_called} {lastname_last_calle
         )
 
     elif "rick" in update.message.text.lower():
-        update.message.reply_video(
-            "https://c.tenor.com/x8v1oNUOmg4AAAAC/rickroll-roll.gif"
-        )
+        option = random.randint(0,1)
+        if option == 0:
+            update.message.reply_video(
+                "https://c.tenor.com/x8v1oNUOmg4AAAAC/rickroll-roll.gif"
+            )
+        else:
+            update.message.reply_text("Here's a Spotify Code to help solve all your problems!\n\nDo scan it!")
+            context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo="https://i.imgur.com/iI76wrG.jpg"
+            )
 
     else:
         count = 0
