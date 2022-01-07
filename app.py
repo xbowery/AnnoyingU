@@ -109,17 +109,19 @@ def unknown(update: Update, context: CallbackContext):
 
 
 def init_settings(chat_id, context):
-    if chat_settings := SETTINGSDB.find_one({"chatid": chat_id}):
-        pass
-    else:
-        chat_settings = {
-            "chatid": chat_id,
-            "Spelling Hornets": True,
-            "Profanity Alert": True,
-            "wordlist": [],
-        }
+
+    if "chat_settings" in context.chat_data:
+        return
+
+    chat_settings = {
+        "chatid": chat_id,
+        "Spelling Hornets": True,
+        "Profanity Alert": True,
+        "wordlist": [],
+    }
 
     context.chat_data["chat_settings"] = chat_settings
+    SETTINGSDB.insert_one(chat_settings)
 
 
 def start(update: Update, context: CallbackContext) -> None:
@@ -139,22 +141,34 @@ def message_check(update: Update, context: CallbackContext):
     if "chat_settings" not in context.chat_data:
         init_settings(update.message.chat_id, context)
 
-    punc = '''!()-[]{};:'"\,<>./?@#$%^&*_~'''
-    text = update.message.text.lower()
+    chat_settings = context.chat_data["chat_settings"]
+    spell_on, profanity_on, custom_wordlist = (
+        chat_settings["Spelling Hornets"],
+        chat_settings["Profanity Alert"],
+        chat_settings["wordlist"],
+    )
+
+    if not spell_on and not profanity_on:
+        return
+
+    msg = update.message.text
+
+    punc = """!()-[]{};:'"\,<>./?@#$%^&*_~"""
+    text = msg.lower()
     for ele in text:
         if ele in punc:
             text = text.replace(ele, "")
     list_words = text.split()
-    for word in list_words:
-        word = word.lower()
 
     profanity.load_censor_words()
+    profanity.add_censor_words(custom_wordlist)
 
-    chat_id = update.message.chat.id
 
-    user_id = str(update.effective_user.id)
-
-    if profanity.contains_profanity(update.message.text) == True:
+    if profanity_on and (
+        profanity.contains_profanity(msg) == True
+    ):
+        user_id = str(update.effective_user.id)
+        
         user_first_name = update.effective_user.first_name
 
         if user_first_name == None:
@@ -250,20 +264,22 @@ Previous user to spew a vulgarity: [{firstname_last_called} {lastname_last_calle
         )
 
     elif "rick" in update.message.text.lower():
-        option = random.randint(0,4)
+        option = random.randint(0, 4)
         if option == 0:
             update.message.reply_video(
                 "https://c.tenor.com/x8v1oNUOmg4AAAAC/rickroll-roll.gif"
             )
         elif option == 1:
-            update.message.reply_text("Here's a Spotify Code to help solve all your problems!\n\nDo scan it using the Spotify app on your phone!")
+            update.message.reply_text(
+                "Here's a Spotify Code to help solve all your problems!\n\nDo scan it using the Spotify app on your phone!"
+            )
             context.bot.send_photo(
                 chat_id=update.effective_chat.id,
-                photo="https://i.imgur.com/iI76wrG.jpg"
+                photo="https://i.imgur.com/iI76wrG.jpg",
             )
         elif option == 2:
             new_list = []
-            with open("lyrics.txt", 'r+', encoding="utf-8") as file:
+            with open("lyrics.txt", "r+", encoding="utf-8") as file:
                 new_list = file.readlines()
                 for text in new_list:
                     words = text.split("%")
@@ -271,16 +287,21 @@ Previous user to spew a vulgarity: [{firstname_last_called} {lastname_last_calle
                     for i in range(len(words)):
                         sentence += words[i] + "\n"
                     context.bot.send_message(
-                        chat_id = update.effective_chat.id,
-                        text = sentence
+                        chat_id=update.effective_chat.id, text=sentence
                     )
                     time.sleep(1.5)
         elif option == 3:
-            update.message.reply_text("Here you go, champ! You earned this 😊\n\nbit.do/YeetYeet", disable_web_page_preview=True)
+            update.message.reply_text(
+                "Here you go, champ! You earned this 😊\n\nbit.do/YeetYeet",
+                disable_web_page_preview=True,
+            )
         else:
-            update.message.reply_text("Hey rockstar, you earned this!\n\nhttps://tinyurl.com/hacknroll2k22", disable_web_page_preview=True)
-    
-    else:
+            update.message.reply_text(
+                "Hey rockstar, you earned this!\n\nhttps://tinyurl.com/hacknroll2k22",
+                disable_web_page_preview=True,
+            )
+
+    elif spell_on:
         count = 0
         for word in list_words:
             if word not in correct_spellings:
@@ -427,6 +448,7 @@ def settings(update: Update, context: CallbackContext):
 def settings_reply(update: Update, context: CallbackContext):
     msg = update.message.text
 
+    print(context.chat_data)
     if "chat_settings" not in context.chat_data:
         init_settings(update.message.chat_id, context)
 
@@ -497,7 +519,7 @@ def change_wordlist(update: Update, context: CallbackContext):
     chat_settings = context.chat_data["chat_settings"]
 
     try:
-        new_list = [a.strip() for a in msg.split(",")]
+        new_list = [a.strip().lower() for a in msg.split(",")]
         chat_settings["wordlist"] = new_list
         update_obj = {"$set": chat_settings}
 
@@ -586,6 +608,10 @@ def main():
 
     # Get dispatcher to register handlers
     dp = updater.dispatcher
+
+    for c in SETTINGSDB.find():
+        del c["_id"]
+        dp.chat_data[c["chatid"]]["chat_settings"] = c
 
     dp.add_handler(CommandHandler("start", start))
 
