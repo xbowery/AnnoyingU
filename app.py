@@ -107,17 +107,19 @@ def unknown(update: Update, context: CallbackContext):
 
 
 def init_settings(chat_id, context):
-    if chat_settings := SETTINGSDB.find_one({"chatid": chat_id}):
-        pass
-    else:
-        chat_settings = {
-            "chatid": chat_id,
-            "Spelling Hornets": True,
-            "Profanity Alert": True,
-            "wordlist": [],
-        }
+
+    if context.chat_data["chat_settings"]:
+        return
+
+    chat_settings = {
+        "chatid": chat_id,
+        "Spelling Hornets": True,
+        "Profanity Alert": True,
+        "wordlist": [],
+    }
 
     context.chat_data["chat_settings"] = chat_settings
+    SETTINGSDB.insert_one(chat_settings)
 
 
 def start(update: Update, context: CallbackContext) -> None:
@@ -134,15 +136,26 @@ To get started, type /help""",
 
 
 def message_check(update: Update, context: CallbackContext):
-    if "chat_settings" not in context.chat_data:
+    if not context.chat_data["chat_settings"]:
         init_settings(update.message.chat_id, context)
 
-    list_words = update.message.text.split()
+    chat_settings = context.chat_data["chat_settings"]
+    spell_on, profanity_on, custom_wordlist = (
+        chat_settings["Spelling Hornets"],
+        chat_settings["Profanity Alert"],
+        chat_settings["wordlist"],
+    )
+
+    if not spell_on and not profanity_on:
+        return
+
+    msg = update.message.text
+    list_words = msg.split()
     profanity.load_censor_words()
 
-    chat_id = update.message.chat.id
-
-    if profanity.contains_profanity(update.message.text) == True:
+    if profanity_on and (
+        profanity.contains_profanity(msg) == True or msg.lower() in custom_wordlist
+    ):
         user_id = str(update.effective_user.id)
         user_first_name = update.effective_user.first_name
 
@@ -238,12 +251,12 @@ Previous user to spew a vulgarity: [{firstname_last_called} {lastname_last_calle
             {"chatid": chat_time_storage["chatid"]}, update_obj, upsert=True
         )
 
-    elif "rick" in update.message.text.lower():
+    elif "rick" in msg.lower():
         update.message.reply_video(
             "https://c.tenor.com/x8v1oNUOmg4AAAAC/rickroll-roll.gif"
         )
 
-    else:
+    elif spell_on:
         count = 0
         for word in list_words:
             if word not in correct_spellings:
@@ -422,7 +435,7 @@ def change_wordlist(update: Update, context: CallbackContext):
     chat_settings = context.chat_data["chat_settings"]
 
     try:
-        new_list = [a.strip() for a in msg.split(",")]
+        new_list = [a.strip().lower() for a in msg.split(",")]
         chat_settings["wordlist"] = new_list
         update_obj = {"$set": chat_settings}
 
@@ -511,6 +524,8 @@ def main():
 
     # Get dispatcher to register handlers
     dp = updater.dispatcher
+
+    # dp.chat_data
 
     dp.add_handler(CommandHandler("start", start))
 
