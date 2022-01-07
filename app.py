@@ -11,6 +11,7 @@ from telegram import (
     KeyboardButton,
     InlineQueryResultArticle,
     InputTextMessageContent,
+    chat,
 )
 from telegram.ext import (
     Updater,
@@ -37,7 +38,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-fake_db = {"Spelling Hornets": True, "Profanity Alert": True}
+ACCEPTABLE_SETTINGS = ["Spelling Hornets", "Profanity Alert"]
 
 top_text = {}
 bottom_text = {}
@@ -173,10 +174,21 @@ def settings(update: Update, context: CallbackContext):
 
 def settings_reply(update: Update, context: CallbackContext):
     msg = update.message.text
-    logger.info(msg)
-    if msg in fake_db:
+
+    if chat_settings := SETTINGSDB.find_one({"chatid": update.message.chat_id}):
+        pass
+    else:
+        chat_settings = {
+            "chatid": update.message.chat_id,
+            "Spelling Hornets": True,
+            "Profanity Alert": True,
+        }
+
+    context.chat_data["chat_settings"] = chat_settings
+
+    if msg in ACCEPTABLE_SETTINGS:
         update.message.reply_text(
-            f"Settings for {msg}: {'ON' if fake_db[msg] else 'OFF'}.\nSelect the new settings:",
+            f"Settings for {msg}: {'ON' if chat_settings[msg] else 'OFF'}.\nSelect the new settings:",
             reply_markup=markup_boolean,
         )
         context.chat_data["Settings_Option"] = msg
@@ -195,23 +207,33 @@ def settings_reply(update: Update, context: CallbackContext):
 def change_settings(update: Update, context: CallbackContext):
     msg = update.message.text
     opt = context.chat_data["Settings_Option"]
+    chat_settings = context.chat_data["chat_settings"]
 
-    if msg not in ["On", "Off", "Back"]:
+    logger.info(chat_settings)
+
+    if msg not in ["On", "Off", "Cancel"]:
         update.message.reply_text(
             "Sorry. This is not a valid option", reply_markup=markup_settings
         )
-        return START_STATE
-    elif msg == "Back":
-        update.message.reply_text(reply_markup=markup_settings)
-        return START_STATE
+        return_state = START_STATE
+    elif msg == "Cancel":
+        update.message.reply_text(
+            "Select the settings to edit:", reply_markup=markup_settings
+        )
+        return_state = START_STATE
     else:
-        fake_db[opt] = True if msg == "On" else False
+        chat_settings[opt] = True if msg == "On" else False
+        return_state = ConversationHandler.END
 
-    update.message.reply_text(
-        f"Settings for {opt}: {'ON' if fake_db[opt] else 'OFF'}",
-        reply_markup=ReplyKeyboardRemove(),
-    )
-    return ConversationHandler.END
+        update.message.reply_text(
+            f"Settings for {opt}: {'ON' if chat_settings[opt] else 'OFF'}",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+
+    update_obj = {"$set": chat_settings}
+
+    SETTINGSDB.update_one({"chatid": chat_settings["chatid"]}, update_obj, upsert=True)
+    return return_state
 
 
 def meme_generator(update: Update, context: CallbackContext):
