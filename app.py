@@ -435,17 +435,28 @@ We also allow users to create memes of a pre\-defined template which links to th
 
 
 def settings(update: Update, context: CallbackContext):
-    update.message.reply_text(
-        "Choose which settings you would like to edit:", reply_markup=markup_settings
-    )
+    user_id = update.effective_user.id
 
-    return FIRST_STATE
+    if user_id is not None:
+        role = Bot.get_chat_member(update.message.chat_id, user_id)["status"]
+        if role in ["ADMINISTRATOR", "CREATOR"]:
+            update.message.reply_text(
+                "Choose which settings you would like to edit:",
+                reply_markup=markup_settings,
+            )
+
+            return FIRST_STATE
+
+    update.message.reply_text(
+        "Insufficient permissions to change settings. Please contact the administrator.",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    return ConversationHandler.END
 
 
 def settings_reply(update: Update, context: CallbackContext):
     msg = update.message.text
 
-    print(context.chat_data)
     if "chat_settings" not in context.chat_data:
         init_settings(update.message.chat_id, context)
 
