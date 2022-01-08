@@ -47,7 +47,6 @@ from wordcloud import WordCloud, STOPWORDS
 
 download("words")  # run this in the first run
 correct_spellings = words.words()
-typos = []
 # typos = []
 
 from pymongo import MongoClient
@@ -324,7 +323,7 @@ Previous user to spew a vulgarity: [{firstname_last_called} {lastname_last_calle
             context.chat_data["typos"][user_id] = typos
 
         for word in list_words:
-            if word not in correct_spellings:
+            if word.isalpha() == True and word not in correct_spellings:
                 count += 1
                 candidates = [
                     (jaccard_distance(set(ngrams(word, 2)), set(ngrams(w, 2))), w)
