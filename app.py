@@ -57,7 +57,12 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-ACCEPTABLE_SETTINGS = ["Spelling Hornets", "Profanity Alert", "Custom Wordlist"]
+ACCEPTABLE_SETTINGS = [
+    "Spelling Hornets",
+    "Profanity Alert",
+    "Custom Blacklist",
+    "Custom Whitelist",
+]
 APPROVED_ADMIN_ROLES = ["administrator", "creator", "member"]
 
 reply_info_keyboard = [
@@ -70,7 +75,8 @@ reply_info_keyboard = [
 reply_settings_keyboard = [
     ["Spelling Hornets"],
     ["Profanity Alert"],
-    ["Custom Wordlist"],
+    ["Custom Blacklist"],
+    ["Custom Whitelist"],
     ["End"],
 ]
 
@@ -119,6 +125,7 @@ def init_settings(chat_id, context):
         "Spelling Hornets": True,
         "Profanity Alert": True,
         "wordlist": [],
+        "whitelist": [],
     }
 
     context.chat_data["chat_settings"] = chat_settings
@@ -464,11 +471,20 @@ def settings_reply(update: Update, context: CallbackContext):
     chat_settings = context.chat_data["chat_settings"]
 
     if msg in ACCEPTABLE_SETTINGS:
+        context.chat_data["Settings_Option"] = msg
 
-        if msg == "Custom Wordlist":
-            wordlist = ", ".join(chat_settings["wordlist"])
+        if msg in ["Custom Blacklist", "Custom Whitelist"]:
+            orig_words = (
+                chat_settings["wordlist"]
+                if msg == "Custom Blacklist"
+                else chat_settings["whitelist"]
+            )
+            wordlist = ", ".join(orig_words)
+            if wordlist == "":
+                wordlist = "EMPTY"
+
             update.message.reply_text(
-                f"Current wordlist: {wordlist}.\n\nPlease enter whether to keep and append to old list (KEEP) or replace (REP) followed by the words seperated by a comma.\n\nExample: KEEP, word1, word2.",
+                f"Current {msg}: {wordlist}.\n\nPlease enter whether to keep and append to old list (KEEP) or replace (REP) followed by the words seperated by a comma.\n\nExample: KEEP, word1, word2.",
                 reply_markup=ReplyKeyboardRemove(),
             )
             return THIRD_STATE
@@ -477,7 +493,6 @@ def settings_reply(update: Update, context: CallbackContext):
             f"Settings for {msg}: {'ON' if chat_settings[msg] else 'OFF'}.\nSelect the new settings:",
             reply_markup=markup_boolean,
         )
-        context.chat_data["Settings_Option"] = msg
         return SECOND_STATE
 
     if msg == "End":
@@ -527,14 +542,27 @@ def change_settings(update: Update, context: CallbackContext):
 def change_wordlist(update: Update, context: CallbackContext):
     msg = update.message.text
     chat_settings = context.chat_data["chat_settings"]
+    prev_options = context.chat_data["Settings_Option"]
 
     try:
-        new_list = [a.strip().lower() for a in msg.split(",")]
+        new_list = [
+            a.strip().lower() for a in msg.split(",") if a.strip() not in ["", " "]
+        ]
+
         if new_list[0] in ["keep", "rep"]:
-            if new_list[0] == "keep":
-                chat_settings["wordlist"] = chat_settings["wordlist"] + new_list[1:]
+            final_list = list(set(new_list[1:]))
+            if prev_options == "Custom Blacklist":
+                if new_list[0] == "keep":
+                    final_list = list(set(chat_settings["wordlist"] + new_list[1:]))
+                    chat_settings["wordlist"] = final_list
+                else:
+                    chat_settings["wordlist"] = final_list
             else:
-                chat_settings["wordlist"] = new_list[1:]
+                if new_list[0] == "keep":
+                    final_list = list(set(chat_settings["whitelist"] + new_list[1:]))
+                    chat_settings["whitelist"] = final_list
+                else:
+                    chat_settings["whitelist"] = final_list
 
             update_obj = {"$set": chat_settings}
 
@@ -547,7 +575,7 @@ def change_wordlist(update: Update, context: CallbackContext):
             context.chat_data["chat_settings"] = chat_settings
 
             update.message.reply_text(
-                f"Wordlist successfully updated.\n\nNew wordlist: {', '.join(chat_settings['wordlist'])}",
+                f"{prev_options} successfully updated.\n\nNew {prev_options}: {', '.join(final_list) if len(final_list) > 0 else 'EMPTY!'}",
                 reply_markup=ReplyKeyboardRemove(),
             )
 
