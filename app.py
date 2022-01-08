@@ -150,10 +150,11 @@ def message_check(update: Update, context: CallbackContext):
         init_settings(update.message.chat_id, context)
 
     chat_settings = context.chat_data["chat_settings"]
-    spell_on, profanity_on, custom_wordlist = (
+    spell_on, profanity_on, blacklist, whitelist = (
         chat_settings["Spelling Hornets"],
         chat_settings["Profanity Alert"],
         chat_settings["wordlist"],
+        chat_settings["whitelist"],
     )
 
     if not spell_on and not profanity_on:
@@ -170,9 +171,13 @@ def message_check(update: Update, context: CallbackContext):
     list_words = text.split()
 
     profanity.load_censor_words()
-    profanity.add_censor_words(custom_wordlist)
+    profanity.add_censor_words(blacklist)
 
-    if profanity_on and (profanity.contains_profanity(msg) == True):
+    if (
+        profanity_on
+        and all(t not in whitelist for t in list_words)
+        and profanity.contains_profanity(msg)
+    ):
 
         user_first_name = update.effective_user.first_name
 
