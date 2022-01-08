@@ -47,7 +47,6 @@ from wordcloud import WordCloud, STOPWORDS
 
 download("words")  # run this in the first run
 correct_spellings = words.words()
-typos = []
 # typos = []
 
 from pymongo import MongoClient
@@ -320,7 +319,7 @@ Previous user to spew a vulgarity: [{firstname_last_called} {lastname_last_calle
         # else:
         #     typos = context.chat_data["typos"][update.effective_user.id]
         for word in list_words:
-            if word not in correct_spellings:
+            if word.isalpha() == True and word not in correct_spellings:
                 count += 1
                 candidates = [
                     (jaccard_distance(set(ngrams(word, 2)), set(ngrams(w, 2))), w)
@@ -351,7 +350,7 @@ Previous user to spew a vulgarity: [{firstname_last_called} {lastname_last_calle
             len(typos) > 10
         ):  # triggered when more than 10 errors, replies with worst jaccard score (i.e. 1)
             typos.sort(key=lambda x: x[1])
-            worst_spelt = context.chat_data["typos"][update.effective_user.id]
+            worst_spelt = context.chat_data["typos"][update.effective_user.id][0][1]
             update.message.reply_text(
                 f"Someone made more than 10 typos today... Your worstly spelt word is {worst_spelt}"
             )
@@ -708,8 +707,6 @@ def main():
 
     dp.add_handler(CommandHandler("word_cloud", word_cloud))
     dp.add_handler(MessageHandler(Filters.text, message_check))
-
-    schedule.run_pending()
 
     unknown_handler = MessageHandler(Filters.command, unknown)
     dp.add_handler(unknown_handler)
