@@ -437,10 +437,9 @@ We also allow users to create memes of a pre\-defined template which links to th
 
 def settings(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    chat_id = update.message.chat_id
 
     if user_id is not None:
-        member = context.bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+        member = update.message.chat.get_member(user_id=user_id)
         if member.status in APPROVED_ADMIN_ROLES:
             update.message.reply_text(
                 "Choose which settings you would like to edit:",
@@ -467,8 +466,9 @@ def settings_reply(update: Update, context: CallbackContext):
     if msg in ACCEPTABLE_SETTINGS:
 
         if msg == "Custom Wordlist":
+            wordlist = ", ".join(chat_settings["wordlist"])
             update.message.reply_text(
-                "Please enter words seperated by a comma. Example: word1, word2",
+                f"Current wordlist: {wordlist}.\n\nPlease enter whether to keep and append to old list (KEEP) or replace (REP) followed by the words seperated by a comma.\n\nExample: KEEP, word1, word2.",
                 reply_markup=ReplyKeyboardRemove(),
             )
             return THIRD_STATE
@@ -530,26 +530,35 @@ def change_wordlist(update: Update, context: CallbackContext):
 
     try:
         new_list = [a.strip().lower() for a in msg.split(",")]
-        chat_settings["wordlist"] = new_list
-        update_obj = {"$set": chat_settings}
+        if new_list[0] in ["keep", "rep"]:
+            if new_list[0] == "keep":
+                chat_settings["wordlist"] = chat_settings["wordlist"] + new_list[1:]
+            else:
+                chat_settings["wordlist"] = new_list[1:]
 
-        SETTINGSDB.update_one(
-            {"chatid": chat_settings["chatid"]},
-            update_obj,
-            upsert=True,
-        )
+            update_obj = {"$set": chat_settings}
 
-        context.chat_data["chat_settings"] = chat_settings
+            SETTINGSDB.update_one(
+                {"chatid": chat_settings["chatid"]},
+                update_obj,
+                upsert=True,
+            )
 
-        update.message.reply_text(
-            f"Wordlist successfully updated",
-            reply_markup=ReplyKeyboardRemove(),
-        )
+            context.chat_data["chat_settings"] = chat_settings
+
+            update.message.reply_text(
+                f"Wordlist successfully updated.\n\nNew wordlist: {', '.join(chat_settings['wordlist'])}",
+                reply_markup=ReplyKeyboardRemove(),
+            )
+
+            return ConversationHandler.END
     except:
-        update.message.reply_text(
-            f"The wordlist entered is malformed, please try again using /settings",
-            reply_markup=ReplyKeyboardRemove(),
-        )
+        pass
+
+    update.message.reply_text(
+        f"The wordlist entered is malformed, please try again using /settings",
+        reply_markup=ReplyKeyboardRemove(),
+    )
     return ConversationHandler.END
 
 
