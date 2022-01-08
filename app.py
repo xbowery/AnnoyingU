@@ -58,6 +58,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 ACCEPTABLE_SETTINGS = ["Spelling Hornets", "Profanity Alert", "Custom Wordlist"]
+APPROVED_ADMIN_ROLES = ["administrator", "creator", "member"]
 
 reply_info_keyboard = [
     ["Spelling Hornets"],
@@ -436,10 +437,11 @@ We also allow users to create memes of a pre\-defined template which links to th
 
 def settings(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
+    chat_id = update.message.chat_id
 
     if user_id is not None:
-        role = Bot.get_chat_member(update.message.chat_id, user_id)["status"]
-        if role in ["ADMINISTRATOR", "CREATOR"]:
+        member = context.bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+        if member.status in APPROVED_ADMIN_ROLES:
             update.message.reply_text(
                 "Choose which settings you would like to edit:",
                 reply_markup=markup_settings,
