@@ -152,6 +152,7 @@ def message_check(update: Update, context: CallbackContext):
         return
 
     msg = update.message.text
+    user_id = str(update.effective_user.id)
 
     punc = """!()-[]{};:'"\,<>./?@#$%^&*_~"""
     text = msg.lower()
@@ -163,12 +164,8 @@ def message_check(update: Update, context: CallbackContext):
     profanity.load_censor_words()
     profanity.add_censor_words(custom_wordlist)
 
+    if profanity_on and (profanity.contains_profanity(msg) == True):
 
-    if profanity_on and (
-        profanity.contains_profanity(msg) == True
-    ):
-        user_id = str(update.effective_user.id)
-        
         user_first_name = update.effective_user.first_name
 
         if user_first_name == None:
