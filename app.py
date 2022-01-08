@@ -162,7 +162,7 @@ def message_check(update: Update, context: CallbackContext):
         return
 
     msg = update.message.text
-    user_id = str(update.effective_user.id)
+    user_id = update.effective_user.id
 
     punc = """!()-[]{};:'"\,<>./?@#$%^&*_~"""
     text = msg.lower()
@@ -188,7 +188,7 @@ def message_check(update: Update, context: CallbackContext):
         if user_last_name == None:
             user_last_name = " "
         user_string = (
-            user_first_name + " (*&%^) " + user_last_name + " (*&%^) " + user_id
+            user_first_name + " (*&%^) " + user_last_name + " (*&%^) " + str(user_id)
         )
 
         datetime_now = datetime.datetime.now()
@@ -315,10 +315,14 @@ Previous user to spew a vulgarity: [{firstname_last_called} {lastname_last_calle
     elif spell_on:
         count = 0
         typos = []
-        # if update.effective_user.id not in context.chat_data["typos"]:
-        #     typos = []
-        # else:
-        #     typos = context.chat_data["typos"][update.effective_user.id]
+        if not "typos" in context.chat_data:
+            context.chat_data["typos"] = {}
+
+        if user_id in context.chat_data["typos"]:
+            typos = context.chat_data["typos"][user_id]
+        else:
+            context.chat_data["typos"][user_id] = typos
+
         for word in list_words:
             if word not in correct_spellings:
                 count += 1
@@ -335,23 +339,15 @@ Previous user to spew a vulgarity: [{firstname_last_called} {lastname_last_calle
                         (correction[0], word)
                     )  # adds jaccard score and original typo into list
 
-        context.chat_data["typos"] = {
-            update.effective_user.id: typos
-        }  # saves typos and scores into list
+        context.chat_data["typos"][user_id] = typos
 
-        if count == 1:  # if there are errors
+        if count > 0:  # if there are errors
             update.message.reply_text(
-                f"Your reply contained {str(count)} typo error! Are you even trying?"
+                f"Your reply contained {count} typo error! Are you even trying?"
             )
-        if count > 1:
-            update.message.reply_text(
-                f"Your reply contained {str(count)} typo errors! Are you even trying?"
-            )
-        if (
-            len(typos) > 10
-        ):  # triggered when more than 10 errors, replies with worst jaccard score (i.e. 1)
-            typos.sort(key=lambda x: x[1])
-            worst_spelt = context.chat_data["typos"][update.effective_user.id]
+        if len(typos) > 10:
+            typos.sort(key=lambda x: x[0])
+            worst_spelt = typos[0][1]
             update.message.reply_text(
                 f"Someone made more than 10 typos today... Your worstly spelt word is {worst_spelt}"
             )
@@ -708,8 +704,6 @@ def main():
 
     dp.add_handler(CommandHandler("word_cloud", word_cloud))
     dp.add_handler(MessageHandler(Filters.text, message_check))
-
-    schedule.run_pending()
 
     unknown_handler = MessageHandler(Filters.command, unknown)
     dp.add_handler(unknown_handler)
