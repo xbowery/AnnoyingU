@@ -29,6 +29,7 @@ import os
 import random
 import datetime
 import time
+import uuid
 
 from dotenv import load_dotenv
 from database import top_text, bottom_text, last_called, last_called_username
@@ -162,10 +163,12 @@ def message_check(update: Update, context: CallbackContext):
     profanity.load_censor_words()
     profanity.add_censor_words(custom_wordlist)
 
+
     if profanity_on and (
         profanity.contains_profanity(msg) == True
     ):
         user_id = str(update.effective_user.id)
+        
         user_first_name = update.effective_user.first_name
 
         if user_first_name == None:
@@ -316,7 +319,9 @@ Previous user to spew a vulgarity: [{firstname_last_called} {lastname_last_calle
                         (correction[0], word)
                     )  # adds jaccard score and original typo into list
 
-        context.chat_data["typos"] = typos  # saves typos and scores into list
+        context.chat_data["typos"] = {
+            user_id: typos
+        }  # saves typos and scores into list
 
         if count == 1:  # if there are errors
             update.message.reply_text(
@@ -334,6 +339,42 @@ Previous user to spew a vulgarity: [{firstname_last_called} {lastname_last_calle
             update.message.reply_text(
                 f"Someone made more than 10 typos today... Your worstly spelt word is {worst_spelt}"
             )
+
+
+def plot_cloud(wordcloud):
+    plt.figure(figsize=(40, 30))
+    plt.imshow(wordcloud)
+    plt.axis("off")
+    filename = str(uuid.uuid4().hex) + ".png"
+    plt.savefig(filename)
+    return filename
+
+
+def word_cloud(update: Update, context: CallbackContext):
+    if not "typos" in context.chat_data:
+        update.message.reply_text("All great! No Spelling erros.")
+        return
+
+    update.message.reply_text("Be patient! I am generating it now!")
+    typos = context.chat_data["typos"]
+    words = []
+    for w in typos.values():
+        for word in w:
+            words.append(word[1])
+
+    wordcloud = WordCloud(
+        width=3000,
+        height=2000,
+        random_state=1,
+        background_color="salmon",
+        colormap="Pastel1",
+        collocations=False,
+    ).generate(" ".join(words))
+    filename = plot_cloud(wordcloud)
+    img = open(filename, "rb")
+    update.message.reply_photo(img)
+
+    os.remove(filename)
 
 
 def help(update: Update, context: CallbackContext):
@@ -607,6 +648,7 @@ def main():
     dp.add_handler(info_handler)
     dp.add_handler(settings_handler)
 
+    dp.add_handler(CommandHandler("word_cloud", word_cloud))
     dp.add_handler(MessageHandler(Filters.text, message_check))
 
     unknown_handler = MessageHandler(Filters.command, unknown)
