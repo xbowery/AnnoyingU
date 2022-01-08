@@ -323,7 +323,7 @@ Previous user to spew a vulgarity: [{firstname_last_called} {lastname_last_calle
             context.chat_data["typos"][user_id] = typos
 
         for word in list_words:
-            if word.isalpha() == True and word not in correct_spellings:
+            if word.isalpha() == True and word not in correct_spellings and all(word not in whitelist for word in list_words):
                 count += 1
                 candidates = [
                     (jaccard_distance(set(ngrams(word, 2)), set(ngrams(w, 2))), w)
